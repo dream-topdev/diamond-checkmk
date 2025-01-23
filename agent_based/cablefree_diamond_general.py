@@ -89,16 +89,16 @@ def discovery_cablefree_diamond_general(section):
 
 
 def check_cablefree_diamond_general(params, section):
-    generalStatusIndex = params.get('generalStatusIndex', None)
+    generalStatusIndex = section['generalStatusIndex']
     if generalStatusIndex == '1':
         summary  = 'Device is Remote'
     else:
         summary  = 'Device is Local'
     
-    summary += ', Location is %s' % params.get('generalStatuslocation', None)
-    summary += ', IP is %s' % params.get('ipStatus', None)    
+    summary += ', Location is %s' % section['generalStatuslocation']
+    summary += ', IP is %s' % section['ipStatus']    
     yield from check_levels(
-        int(section['temperature']),
+        int(section['temperature']) / 10,
         levels_upper=params.get('temperature', None),
         label='Temperature',
         metric_name='cablefree_diamond_general_temperature',
@@ -122,9 +122,9 @@ def check_cablefree_diamond_general(params, section):
         summary += ', XPIC is enabled'
     else:
         summary += ', XPIC is disabled'
-    summary += ', Site Name is %s' % params.get('siteName', None)
-    summary += ', System Uptime is %s' % params.get('systemUptime', None)
-    summary += ', MCU Uptime is %s' % params.get('mcuUptime', None)
+    summary += ', Site Name is %s' % section['siteName']
+    summary += ', System Uptime is %s' % section['systemUptime']
+    summary += ', MCU Uptime is %s' % section['mcuUptime']
     if section['systemAlarm'] == '1':
         summary += ', System Alarm is active'
     else:
@@ -135,9 +135,9 @@ def check_cablefree_diamond_general(params, section):
 
 register.check_plugin(
     name='cablefree_diamond_general',
-    service_name='Diamond State',
+    service_name='Diamond General Status',
     discovery_function=discovery_cablefree_diamond_general,
     check_function=check_cablefree_diamond_general,
-    check_ruleset_name='cablefree_diamond_general',
+    check_ruleset_name='cablefree_diamond',
     check_default_parameters={},
 )

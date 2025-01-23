@@ -139,15 +139,15 @@ def check_cablefree_diamond_channel(params, section):
         render_func=lambda v: f'{v}Kbps'
     )
     yield from check_levels(
-        int(section['rsl']),
-        levels_upper=params.get('rsl', None) / 10,
+        int(section['rsl']) / 10,
+        levels_upper=params.get('rsl', None),
         label='RSL',
         metric_name='cablefree_diamond_channel_rsl',
         render_func=lambda v: f'{v}dBm'
     )
     yield from check_levels(
-        int(section['snr']),
-        levels_upper=params.get('snr', None) / 10,
+        int(section['snr']) / 10,
+        levels_upper=params.get('snr', None),
         label='SNR',
         metric_name='cablefree_diamond_channel_snr',
         render_func=lambda v: f'{v}dB'
@@ -171,6 +171,6 @@ register.check_plugin(
     service_name='Diamond Channel State',
     discovery_function=discovery_cablefree_diamond_channel,
     check_function=check_cablefree_diamond_channel,
-    check_ruleset_name='cablefree_diamond_channel',
+    check_ruleset_name='cablefree_diamond',
     check_default_parameters={},
 )

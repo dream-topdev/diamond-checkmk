@@ -24,19 +24,19 @@ from cmk.gui.plugins.metrics import metric_info, check_metrics, perfometer_info,
 
 # metrics for general
 metric_info["cablefree_diamond_general_temperature"] = {
-    "title": _("Temperature"),
-    "unit": "°C",
-    "color": "#00e060",
+    "title": _("Temperature (°C)"),
+    "unit": "count",
+    "color": "#00e060",    
 }
 metric_info["cablefree_diamond_general_tr1RSSI"] = {
-    "title": _("TR1 RSSI"),
-    "unit": "mV",
-    "color": "#00e060",
+    "title": _("TR1 RSSI (mV)"),
+    "unit": "count",
+    "color": "#003200",    
 }
 metric_info["cablefree_diamond_general_tr2RSSI"] = {
-    "title": _("TR2 RSSI"),
-    "unit": "mV",
-    "color": "#00e060",
+    "title": _("TR2 RSSI (mV)"),
+    "unit": "count",
+    "color": "#ff69b4",
 }
 check_metrics["check_mk-cablefree_diamond_general"] = {
     "temperature": {
@@ -52,33 +52,38 @@ check_metrics["check_mk-cablefree_diamond_general"] = {
 
 # metrics for channel
 metric_info["cablefree_diamond_channel_tx_frequency"] = {
-    "title": _("TX Frequency"),
-    "unit": "kHz",
+    "title": _("TX Frequency (kHz)"),
+    "unit": "count",
     "color": "#00e060",
 }
 metric_info["cablefree_diamond_channel_rx_frequency"] = {
-    "title": _("RX Frequency"),
-    "unit": "kHz",
+    "title": _("RX Frequency (kHz)"),
+    "unit": "count",
     "color": "#00e060",
 }
 metric_info["cablefree_diamond_channel_band_width"] = {
-    "title": _("Bandwidth"),
-    "unit": "kHz",
+    "title": _("Bandwidth (kHz)"),
+    "unit": "count",
     "color": "#00e060",
 }
 metric_info["cablefree_diamond_channel_capacity"] = {
-    "title": _("Capacity"),
-    "unit": "Kbps",
+    "title": _("Capacity (Kbps)"),
+    "unit": "count",
     "color": "#00e060",
 }
 metric_info["cablefree_diamond_channel_rsl"] = {
-    "title": _("RSL"),
-    "unit": "dBm",
+    "title": _("RSL (dBm)"),
+    "unit": "count",
     "color": "#00e060",
 }
 metric_info["cablefree_diamond_channel_snr"] = {
-    "title": _("SNR"),
-    "unit": "dB",
+    "title": _("SNR (dB)"),
+    "unit": "count",
+    "color": "#00e060",
+}
+metric_info["cablefree_diamond_channel_tx_power"] = {
+    "title": _("TX Power (dBm)"),
+    "unit": "count",
     "color": "#00e060",
 }
 check_metrics["check_mk-cablefree_diamond_channel"] = {
