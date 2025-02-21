@@ -50,27 +50,31 @@ from cmk.base.plugins.agent_based.agent_based_api.v1 import (
 
 
 def parse_sysDescr(string_table):
-    return {
-        'channelStatusIndex': string_table[0][0],
-        'channelStatuslocation': string_table[0][1],
-        'txFrequency': string_table[0][2],
-        'rxFrequency': string_table[0][3],
-        'trSpacing': string_table[0][4],
-        'trSide': string_table[0][5],
-        'bandWidth': string_table[0][6],
-        'capacity': string_table[0][7],
-        'rsl': string_table[0][8],
-        'snr': string_table[0][9],
-        'txPower': string_table[0][10],
-        'currentTxModulation': string_table[0][11],
-        'currentRxModulation': string_table[0][12],
-        'txMuteStatus': string_table[0][13],
-        'modemLockStatus': string_table[0][14],
-    }
+    parsed = {}
+    for row in string_table:
+        channel_id = row[0]
+        parsed[channel_id] = {
+            'channelStatusIndex': row[0],
+            'channelStatuslocation': row[1],
+            'txFrequency': row[2],
+            'rxFrequency': row[3],
+            'trSpacing': row[4],
+            'trSide': row[5],
+            'bandWidth': row[6],
+            'capacity': row[7],
+            'rsl': row[8],
+            'snr': row[9],
+            'txPower': row[10],
+            'currentTxModulation': row[11],
+            'currentRxModulation': row[12],
+            'txMuteStatus': row[13],
+            'modemLockStatus': row[14],
+        }
+    return parsed
 
 register.snmp_section(
     name='cablefree_diamond_channel',
-    detect = startswith(".1.3.6.1.4.1.91111.4.80.1.1.1.1.0", "diamond"),
+    detect = startswith(".1.3.6.1.2.1.1.1.0", "CableFree GigaBit Ethernet Switch"),
     fetch=SNMPTree(
         base='.1.3.6.1.4.1.91111.4.80.1.1.2.1',
         oids=[
@@ -96,79 +100,84 @@ register.snmp_section(
 
 
 def discovery_cablefree_diamond_channel(section):
-    if section:
-        yield Service()
+    for channel_id in section:
+        yield Service(item=channel_id)
 
 
-def check_cablefree_diamond_channel(params, section):    
-    summary = f"Channel {section['channelStatusIndex']} is {section['channelStatuslocation']}"
+def check_cablefree_diamond_channel(item, params, section):
+    if item not in section:
+        return
+    
+    channel_data = section[item]
+    summary = f"Channel {channel_data['channelStatusIndex']} is {channel_data['channelStatuslocation']}"
+    
     yield from check_levels(
-        int(section['txFrequency']),
+        int(channel_data['txFrequency']),
         levels_upper=params.get('txFrequency', None),
         label='TX Frequency',
-        metric_name='cablefree_diamond_channel_tx_frequency',
+        metric_name=f'cablefree_diamond_channel_{item}_tx_frequency',
         render_func=lambda v: f'{v}kHz'
     )
     yield from check_levels(
-        int(section['rxFrequency']),
+        int(channel_data['rxFrequency']),
         levels_upper=params.get('rxFrequency', None),
         label='RX Frequency',
-        metric_name='cablefree_diamond_channel_rx_frequency',
+        metric_name=f'cablefree_diamond_channel_{item}_rx_frequency',
         render_func=lambda v: f'{v}kHz'
     )
     yield from check_levels(
-        int(section['trSpacing']),
+        int(channel_data['trSpacing']),
         levels_upper=params.get('trSpacing', None),
         label='TR Spacing',
-        metric_name='cablefree_diamond_channel_tr_spacing',
+        metric_name=f'cablefree_diamond_channel_{item}_tr_spacing',
         render_func=lambda v: f'{v}kHz'
     )
-    summary += f", TR Side is {section['trSide']}"
+    summary += f", TR Side is {channel_data['trSide']}"
     yield from check_levels(
-        int(section['bandWidth']),
+        int(channel_data['bandWidth']),
         levels_upper=params.get('bandWidth', None),
         label='Bandwidth',
-        metric_name='cablefree_diamond_channel_band_width',
+        metric_name=f'cablefree_diamond_channel_{item}_band_width',
         render_func=lambda v: f'{v}kHz'
     )
     yield from check_levels(
-        int(section['capacity']),
+        int(channel_data['capacity']),
         levels_upper=params.get('capacity', None),
         label='Capacity',
-        metric_name='cablefree_diamond_channel_capacity',
+        metric_name=f'cablefree_diamond_channel_{item}_capacity',
         render_func=lambda v: f'{v}Kbps'
     )
     yield from check_levels(
-        int(section['rsl']) / 10,
+        int(channel_data['rsl']) / 10,
         levels_upper=params.get('rsl', None),
         label='RSL',
-        metric_name='cablefree_diamond_channel_rsl',
+        metric_name=f'cablefree_diamond_channel_{item}_rsl',
         render_func=lambda v: f'{v}dBm'
     )
     yield from check_levels(
-        int(section['snr']) / 10,
+        int(channel_data['snr']) / 10,
         levels_upper=params.get('snr', None),
         label='SNR',
-        metric_name='cablefree_diamond_channel_snr',
+        metric_name=f'cablefree_diamond_channel_{item}_snr',
         render_func=lambda v: f'{v}dB'
     )
     yield from check_levels(
-        int(section['txPower']),
+        int(channel_data['txPower']),
         levels_upper=params.get('txPower', None),
         label='TX Power',
-        metric_name='cablefree_diamond_channel_tx_power',
+        metric_name=f'cablefree_diamond_channel_{item}_tx_power',
         render_func=lambda v: f'{v}dBm'
     )
-    summary += f", Current TX Modulation is {section['currentTxModulation']}"
-    summary += f", Current RX Modulation is {section['currentRxModulation']}"
-    summary += f", TX Mute Status is {'Muted' if section['txMuteStatus'] == 1 else 'Unmuted'}"
-    summary += f", Modem Lock Status is {'Locked' if section['modemLockStatus'] == 1 else 'Unlocked'}"
+    summary += f", Current TX Modulation is {channel_data['currentTxModulation']}"
+    summary += f", Current RX Modulation is {channel_data['currentRxModulation']}"
+    summary += f", TX Mute Status is {'Muted' if channel_data['txMuteStatus'] == '1' else 'Unmuted'}"
+    summary += f", Modem Lock Status is {'Locked' if channel_data['modemLockStatus'] == '1' else 'Unlocked'}"
     yield Result(state=State.OK, summary=summary)
 
 
 register.check_plugin(
     name='cablefree_diamond_channel',
-    service_name='Diamond Channel State',
+    service_name='Diamond Channel %s',  # %s will be replaced with the channel ID
     discovery_function=discovery_cablefree_diamond_channel,
     check_function=check_cablefree_diamond_channel,
     check_ruleset_name='cablefree_diamond',

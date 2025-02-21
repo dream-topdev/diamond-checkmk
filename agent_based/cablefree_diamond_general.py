@@ -46,23 +46,27 @@ from cmk.base.plugins.agent_based.agent_based_api.v1 import (
 
 
 def parse_sysDescr(string_table):
-    return {
-        'generalStatusIndex': string_table[0][0],
-        'generalStatuslocation': string_table[0][1],
-        'ipStatus': string_table[0][2],
-        'temperature': string_table[0][3],
-        'tr1RSSI': string_table[0][4],
-        'tr2RSSI': string_table[0][5],
-        'xpicMode': string_table[0][6],
-        'siteName': string_table[0][7],
-        'systemUptime': string_table[0][8],
-        'mcuUptime': string_table[0][9],
-        'systemAlarm': string_table[0][10],
-    }
+    parsed = {}
+    for row in string_table:
+        instance_id = row[0]
+        parsed[instance_id] = {
+            'generalStatusIndex': row[0],
+            'generalStatuslocation': row[1],
+            'ipStatus': row[2],
+            'temperature': row[3],
+            'tr1RSSI': row[4],
+            'tr2RSSI': row[5],
+            'xpicMode': row[6],
+            'siteName': row[7],
+            'systemUptime': row[8],
+            'mcuUptime': row[9],
+            'systemAlarm': row[10],
+        }
+    return parsed
 
 register.snmp_section(
     name='cablefree_diamond_general',
-    detect = startswith(".1.3.6.1.4.1.91111.4.80.1.1.1.1.0", "diamond"),
+    detect = startswith(".1.3.6.1.2.1.1.1.0", "CableFree GigaBit Ethernet Switch"),
     fetch=SNMPTree(
         base='.1.3.6.1.4.1.91111.4.80.1.1.1.1',
         oids=[
@@ -84,48 +88,56 @@ register.snmp_section(
 
 
 def discovery_cablefree_diamond_general(section):
-    if section:
-        yield Service()
+    for instance_id in section:
+        yield Service(item=instance_id)
 
 
-def check_cablefree_diamond_general(params, section):
-    generalStatusIndex = section['generalStatusIndex']
-    if generalStatusIndex == '1':
-        summary  = 'Device is Remote'
-    else:
-        summary  = 'Device is Local'
+def check_cablefree_diamond_general(item, params, section):
+    if item not in section:
+        return
     
-    summary += ', Location is %s' % section['generalStatuslocation']
-    summary += ', IP is %s' % section['ipStatus']    
+    instance_data = section[item]
+    generalStatusIndex = instance_data['generalStatusIndex']
+    if generalStatusIndex == '1':
+        summary = 'Device is Remote'
+    else:
+        summary = 'Device is Local'
+    
+    summary += f", Location is {instance_data['generalStatuslocation']}"
+    summary += f", IP is {instance_data['ipStatus']}"
+    
     yield from check_levels(
-        int(section['temperature']) / 10,
+        int(instance_data['temperature']) / 10,
         levels_upper=params.get('temperature', None),
         label='Temperature',
-        metric_name='cablefree_diamond_general_temperature',
+        metric_name=f'cablefree_diamond_general_{item}_temperature',
         render_func=lambda v: f'{v}°C'
     )
     yield from check_levels(
-        int(section['tr1RSSI']),
+        int(instance_data['tr1RSSI']),
         levels_upper=params.get('tr1RSSI', None),
         label='TR1 RSSI',
-        metric_name='cablefree_diamond_general_tr1RSSI',
+        metric_name=f'cablefree_diamond_general_{item}_tr1RSSI',
         render_func=lambda v: f'{v}mV'
     )
     yield from check_levels(
-        int(section['tr2RSSI']),
+        int(instance_data['tr2RSSI']),
         levels_upper=params.get('tr2RSSI', None),
         label='TR2 RSSI',
-        metric_name='cablefree_diamond_general_tr2RSSI',
+        metric_name=f'cablefree_diamond_general_{item}_tr2RSSI',
         render_func=lambda v: f'{v}mV'
     )
-    if section['xpicMode'] == '1':
+    
+    if instance_data['xpicMode'] == '1':
         summary += ', XPIC is enabled'
     else:
         summary += ', XPIC is disabled'
-    summary += ', Site Name is %s' % section['siteName']
-    summary += ', System Uptime is %s' % section['systemUptime']
-    summary += ', MCU Uptime is %s' % section['mcuUptime']
-    if section['systemAlarm'] == '1':
+    
+    summary += f", Site Name is {instance_data['siteName']}"
+    summary += f", System Uptime is {instance_data['systemUptime']}"
+    summary += f", MCU Uptime is {instance_data['mcuUptime']}"
+    
+    if instance_data['systemAlarm'] == '1':
         summary += ', System Alarm is active'
     else:
         summary += ', System Alarm is inactive'
@@ -135,7 +147,7 @@ def check_cablefree_diamond_general(params, section):
 
 register.check_plugin(
     name='cablefree_diamond_general',
-    service_name='Diamond General Status',
+    service_name='Diamond General Status %s',  # %s will be replaced with the instance ID
     discovery_function=discovery_cablefree_diamond_general,
     check_function=check_cablefree_diamond_general,
     check_ruleset_name='cablefree_diamond',
