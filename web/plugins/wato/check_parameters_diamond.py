@@ -20,6 +20,7 @@
 from cmk.gui.i18n import _
 from cmk.gui.valuespec import (
     Dictionary,
+    Integer,
 )
 
 from cmk.gui.plugins.wato import (
@@ -31,6 +32,21 @@ from cmk.gui.plugins.wato import (
 
 def _parameter_valuespec_cablefree_diamond():
     return Dictionary(elements=[
+        (
+            "bandWidth",
+            Integer(
+                title=_("Bandwidth"),
+                default_value=80,
+            ),
+        ),
+        (
+            "rsl",
+            Integer(
+                title=_("RSL"),
+                default_value=None,
+            ),
+        ),
+
     ])
 
 

@@ -45,8 +45,10 @@ from cmk.base.plugins.agent_based.agent_based_api.v1 import (
     startswith,
     Result,
     State,
-    render
+    render,
+    get_value_store,
 )
+from cmk.base.plugins.agent_based.agent_based_api.v1.type_defs import StringTable
 
 
 def parse_sysDescr(string_table):
@@ -104,11 +106,25 @@ def discovery_cablefree_diamond_channel(section):
         yield Service(item=channel_id)
 
 
+def calculate_bandwidth_usage(capacity, bandWidth):
+    """Calculate bandwidth usage percentage"""
+    if bandWidth > 0:
+        usage_percentage = (capacity / bandWidth) * 100
+        return min(usage_percentage, 100)
+    return 0
+
 def check_cablefree_diamond_channel(item, params, section):
     if item not in section:
         return
     
     channel_data = section[item]
+    value_store = get_value_store()
+    
+    # State management keys
+    bandwidth_key = f"cablefree_diamond_channel_{item}_bandwidth"
+    tx_modulation_key = f"cablefree_diamond_channel_{item}_tx_modulation"
+    rx_modulation_key = f"cablefree_diamond_channel_{item}_rx_modulation"
+    
     summary = f"Channel {channel_data['channelStatusIndex']} is {channel_data['channelStatuslocation']}"
     
     yield from check_levels(
@@ -133,13 +149,45 @@ def check_cablefree_diamond_channel(item, params, section):
         render_func=lambda v: f'{v}kHz'
     )
     summary += f", TR Side is {channel_data['trSide']}"
+    
+    # Bandwidth change monitoring
+    current_bandwidth = int(channel_data['bandWidth'])
+    previous_bandwidth = value_store.get(bandwidth_key, current_bandwidth)
+    
+    if previous_bandwidth != current_bandwidth:
+        bandwidth_change = current_bandwidth - previous_bandwidth
+        if bandwidth_change < 0:
+            summary += f", Bandwidth decreased by {abs(bandwidth_change)}kHz"
+            yield Result(state=State.WARN, summary=summary)
+        else:
+            summary += f", Bandwidth increased by {bandwidth_change}kHz"
+    
+    value_store[bandwidth_key] = current_bandwidth
+    
     yield from check_levels(
-        int(channel_data['bandWidth']),
+        current_bandwidth,
         levels_upper=params.get('bandWidth', None),
         label='Bandwidth',
         metric_name=f'cablefree_diamond_channel_{item}_band_width',
         render_func=lambda v: f'{v}kHz'
     )
+    
+    # Get bandwidth values
+    current_capacity = int(channel_data['capacity'])
+    
+    # Calculate bandwidth usage
+    bandwidth_usage = calculate_bandwidth_usage(current_capacity, current_bandwidth)
+    
+    # Bandwidth usage monitoring with tuple thresholds
+    bandwidth_usage_threshold = params.get('bandwidth_usage', (80, 95))  # Default (warn, crit)
+    yield from check_levels(
+        bandwidth_usage,
+        levels_upper=bandwidth_usage_threshold,  # Tuple: (warn, crit)
+        label='Bandwidth Usage',
+        metric_name=f'cablefree_diamond_channel_{item}_bandwidth_usage',
+        render_func=lambda v: f'{v:.1f}%'
+    )
+    
     yield from check_levels(
         int(channel_data['capacity']),
         levels_upper=params.get('capacity', None),
@@ -147,6 +195,7 @@ def check_cablefree_diamond_channel(item, params, section):
         metric_name=f'cablefree_diamond_channel_{item}_capacity',
         render_func=lambda v: f'{v}Kbps'
     )
+    
     yield from check_levels(
         int(channel_data['rsl']) / 10,
         levels_upper=params.get('rsl', None),
@@ -154,6 +203,7 @@ def check_cablefree_diamond_channel(item, params, section):
         metric_name=f'cablefree_diamond_channel_{item}_rsl',
         render_func=lambda v: f'{v}dBm'
     )
+    
     yield from check_levels(
         int(channel_data['snr']) / 10,
         levels_upper=params.get('snr', None),
@@ -168,8 +218,41 @@ def check_cablefree_diamond_channel(item, params, section):
         metric_name=f'cablefree_diamond_channel_{item}_tx_power',
         render_func=lambda v: f'{v}dBm'
     )
-    summary += f", Current TX Modulation is {channel_data['currentTxModulation']}"
-    summary += f", Current RX Modulation is {channel_data['currentRxModulation']}"
+    
+    # Modulation change monitoring
+    current_tx_modulation = channel_data['currentTxModulation']
+    current_rx_modulation = channel_data['currentRxModulation']
+    
+    previous_tx_modulation = value_store.get(tx_modulation_key, current_tx_modulation)
+    previous_rx_modulation = value_store.get(rx_modulation_key, current_rx_modulation)
+    
+    # Check for modulation changes from higher to lower
+    # Assuming modulation values are numeric where higher numbers = higher modulation
+    try:
+        tx_modulation_change = int(current_tx_modulation) - int(previous_tx_modulation)
+        rx_modulation_change = int(current_rx_modulation) - int(previous_rx_modulation)
+        
+        if tx_modulation_change < 0:
+            summary += f", TX Modulation decreased from {previous_tx_modulation} to {current_tx_modulation}"
+            yield Result(state=State.WARN, summary=summary)
+        elif tx_modulation_change > 0:
+            summary += f", TX Modulation increased from {previous_tx_modulation} to {current_tx_modulation}"
+        
+        if rx_modulation_change < 0:
+            summary += f", RX Modulation decreased from {previous_rx_modulation} to {current_rx_modulation}"
+            yield Result(state=State.WARN, summary=summary)
+        elif rx_modulation_change > 0:
+            summary += f", RX Modulation increased from {previous_rx_modulation} to {current_rx_modulation}"
+            
+    except ValueError:
+        # If modulation values are not numeric, just display current values
+        pass
+    
+    value_store[tx_modulation_key] = current_tx_modulation
+    value_store[rx_modulation_key] = current_rx_modulation
+    
+    summary += f", Current TX Modulation is {current_tx_modulation}"
+    summary += f", Current RX Modulation is {current_rx_modulation}"
     summary += f", TX Mute Status is {'Muted' if channel_data['txMuteStatus'] == '1' else 'Unmuted'}"
     summary += f", Modem Lock Status is {'Locked' if channel_data['modemLockStatus'] == '1' else 'Unlocked'}"
     yield Result(state=State.OK, summary=summary)
