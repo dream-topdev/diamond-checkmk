@@ -150,10 +150,10 @@ def check_cablefree_diamond_channel(item, params, section):
     if previous_bandwidth != current_bandwidth:
         bandwidth_change = current_bandwidth - previous_bandwidth
         if bandwidth_change < 0:
-            summary += f", Bandwidth decreased by {abs(bandwidth_change)}kHz"
+            summary += f", Bandwidth decreased by {normalize_value(abs(bandwidth_change), 1000, ['kHz', 'MHz', 'GHz'], 'frequency')}"
             yield Result(state=State.WARN, summary=summary)
         else:
-            summary += f", Bandwidth increased by {bandwidth_change}kHz"
+            summary += f", Bandwidth increased by {normalize_value(bandwidth_change, 1000, ['kHz', 'MHz', 'GHz'], 'frequency')}"
     
     value_store[bandwidth_key] = current_bandwidth
     
