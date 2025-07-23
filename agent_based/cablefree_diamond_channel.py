@@ -235,7 +235,16 @@ def check_cablefree_diamond_channel(item, params, section):
     summary += f", Current TX Modulation is {current_tx_modulation}"
     summary += f", Current RX Modulation is {current_rx_modulation}"
     summary += f", TX Mute Status is {'Muted' if channel_data['txMuteStatus'] == '1' else 'Unmuted'}"
-    summary += f", Modem Lock Status is {'Locked' if channel_data['modemLockStatus'] == '1' else 'Unlocked'}"
+    
+    # Check modem lock status - CRITICAL if unlocked (link down)
+    modem_lock_status = channel_data['modemLockStatus']
+    if modem_lock_status == '0':  # Unlocked
+        summary += f", Modem Lock Status is Unlocked (LINK DOWN)"
+        yield Result(state=State.CRIT, summary=summary)
+        return  # Return early with CRITICAL state
+    else:
+        summary += f", Modem Lock Status is Locked"
+    
     yield Result(state=State.OK, summary=summary)
 
 
