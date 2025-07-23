@@ -106,13 +106,6 @@ def discovery_cablefree_diamond_channel(section):
         yield Service(item=channel_id)
 
 
-def calculate_bandwidth_usage(capacity, bandWidth):
-    """Calculate bandwidth usage percentage"""
-    if bandWidth > 0:
-        usage_percentage = (capacity / bandWidth) * 100
-        return min(usage_percentage, 100)
-    return 0
-
 def check_cablefree_diamond_channel(item, params, section):
     if item not in section:
         return
@@ -175,18 +168,6 @@ def check_cablefree_diamond_channel(item, params, section):
     # Get bandwidth values
     current_capacity = int(channel_data['capacity'])
     
-    # Calculate bandwidth usage
-    bandwidth_usage = calculate_bandwidth_usage(current_capacity, current_bandwidth)
-    
-    # Bandwidth usage monitoring with tuple thresholds
-    bandwidth_usage_threshold = params.get('bandwidth_usage', (80, 95))  # Default (warn, crit)
-    yield from check_levels(
-        bandwidth_usage,
-        levels_upper=bandwidth_usage_threshold,  # Tuple: (warn, crit)
-        label='Bandwidth Usage',
-        metric_name=f'cablefree_diamond_channel_{item}_bandwidth_usage',
-        render_func=lambda v: f'{v:.1f}%'
-    )
     
     yield from check_levels(
         int(channel_data['capacity']),

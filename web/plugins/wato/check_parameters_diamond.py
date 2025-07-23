@@ -21,6 +21,7 @@ from cmk.gui.i18n import _
 from cmk.gui.valuespec import (
     Dictionary,
     Integer,
+    Tuple
 )
 
 from cmk.gui.plugins.wato import (
@@ -33,17 +34,22 @@ from cmk.gui.plugins.wato import (
 def _parameter_valuespec_cablefree_diamond():
     return Dictionary(elements=[
         (
-            "bandWidth",
-            Integer(
-                title=_("Bandwidth"),
-                default_value=80,
-            ),
-        ),
-        (
             "rsl",
-            Integer(
-                title=_("RSL"),
-                default_value=None,
+            Tuple(
+                title=_("RSL Threshold (dBm)"),
+                help=_("Warning and critical thresholds for RSL. Use negative values (e.g., -70 for -70 dBm). Lower values = better signal."),
+                elements=[
+                    Integer(
+                        title=_("Warning at"),
+                        default_value=-70,
+                        unit=_("dBm"),
+                    ),
+                    Integer(
+                        title=_("Critical at"),
+                        default_value=-80,
+                        unit=_("dBm"),
+                    ),
+                ],
             ),
         ),
 
