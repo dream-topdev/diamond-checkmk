@@ -16,7 +16,7 @@
            'mibs': [],
            'notifications': [],
            'pnp-templates': [],
-           'web': ['plugins/metrics/cablefree_diamond.py']},
+           'web': ['plugins/metrics/cablefree_diamond.py', 'plugins/wato/check_parameters_diamond.py']},
  'name': 'cablefree_diamond',
  'title': 'SNMP Management of Cablefree Diamond',
  'version': '1.0.0',
