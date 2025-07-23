@@ -41,8 +41,64 @@ from cmk.base.plugins.agent_based.agent_based_api.v1 import (
     startswith,
     Result,
     State,
-    render
+    render,
+    get_value_store,
 )
+
+
+def parse_uptime_to_minutes(uptime_str):
+    """
+    Parse uptime string and convert to minutes.
+    Expected format: "0d 00:24:25" (days, hours:minutes:seconds)
+    """
+    try:
+        # Remove any extra spaces
+        uptime_str = uptime_str.strip()
+        
+        # Split by space to separate days from time
+        parts = uptime_str.split()
+        
+        total_minutes = 0
+        
+        if len(parts) >= 2:
+            # Parse days (e.g., "0d")
+            days_part = parts[0]
+            if days_part.endswith('d'):
+                days = int(days_part[:-1])  # Remove 'd' and convert to int
+                total_minutes += days * 24 * 60
+            
+            # Parse time part (e.g., "00:24:25")
+            time_part = parts[1]
+            time_components = time_part.split(':')
+            
+            if len(time_components) >= 3:
+                hours = int(time_components[0])
+                minutes = int(time_components[1])
+                seconds = int(time_components[2])
+                
+                total_minutes += hours * 60 + minutes + seconds / 60
+            elif len(time_components) == 2:
+                # If only hours:minutes format
+                hours = int(time_components[0])
+                minutes = int(time_components[1])
+                total_minutes += hours * 60 + minutes
+        else:
+            # If no space separator, try to parse as just time
+            time_components = uptime_str.split(':')
+            if len(time_components) >= 3:
+                hours = int(time_components[0])
+                minutes = int(time_components[1])
+                seconds = int(time_components[2])
+                total_minutes += hours * 60 + minutes + seconds / 60
+            elif len(time_components) == 2:
+                hours = int(time_components[0])
+                minutes = int(time_components[1])
+                total_minutes += hours * 60 + minutes
+        
+        return total_minutes
+    except (ValueError, AttributeError, IndexError):
+        # If parsing fails, return 0 to trigger alarm
+        return 0
 
 
 def parse_sysDescr(string_table):
@@ -134,8 +190,71 @@ def check_cablefree_diamond_general(item, params, section):
         summary += ', XPIC is disabled'
     
     summary += f", Site Name is {instance_data['siteName']}"
-    summary += f", System Uptime is {instance_data['systemUptime']}"
-    summary += f", MCU Uptime is {instance_data['mcuUptime']}"
+    
+    # Check uptime values with sophisticated logic
+    system_uptime_str = instance_data['systemUptime']
+    mcu_uptime_str = instance_data['mcuUptime']
+    
+    system_uptime_minutes = parse_uptime_to_minutes(system_uptime_str)
+    mcu_uptime_minutes = parse_uptime_to_minutes(mcu_uptime_str)
+    
+    # Get value store for tracking uptime history
+    value_store = get_value_store()
+    system_uptime_key = f"cablefree_diamond_general_{item}_system_uptime_history"
+    mcu_uptime_key = f"cablefree_diamond_general_{item}_mcu_uptime_history"
+    
+    # Get previous uptime values
+    system_uptime_history = value_store.get(system_uptime_key, [])
+    mcu_uptime_history = value_store.get(mcu_uptime_key, [])
+    
+    # Check for suspicious uptime patterns
+    def check_uptime_suspicious(current_uptime, uptime_history, uptime_name):
+        if current_uptime < 5:
+            # If uptime is very low, check if this is a new startup or suspicious
+            if len(uptime_history) > 0:
+                # Check if uptime decreased significantly (indicating restart)
+                last_uptime = uptime_history[-1]
+                if last_uptime > 30 and current_uptime < 5:  # Was running >30min, now <5min
+                    return True, f"{uptime_name} Uptime is {system_uptime_str if uptime_name == 'System' else mcu_uptime_str} (SUSPICIOUS RESTART - was {last_uptime:.1f}min, now {current_uptime:.1f}min)"
+                elif len(uptime_history) >= 3:
+                    # Check if this is the third time in recent history with low uptime
+                    recent_low_uptimes = sum(1 for u in uptime_history[-3:] if u < 5)
+                    if recent_low_uptimes >= 2:
+                        return True, f"{uptime_name} Uptime is {system_uptime_str if uptime_name == 'System' else mcu_uptime_str} (FREQUENT RESTARTS - {recent_low_uptimes + 1} times with low uptime)"
+            else:
+                # First time seeing this device, assume normal startup
+                return False, f"{uptime_name} Uptime is {system_uptime_str if uptime_name == 'System' else mcu_uptime_str} (Initial startup)"
+        return False, f"{uptime_name} Uptime is {system_uptime_str if uptime_name == 'System' else mcu_uptime_str}"
+    
+    # Check system uptime
+    system_suspicious, system_msg = check_uptime_suspicious(system_uptime_minutes, system_uptime_history, "System")
+    if system_suspicious:
+        summary += f", {system_msg}"
+        yield Result(state=State.CRIT, summary=summary)
+        return  # Return early with CRITICAL state
+    else:
+        summary += f", {system_msg}"
+    
+    # Check MCU uptime
+    mcu_suspicious, mcu_msg = check_uptime_suspicious(mcu_uptime_minutes, mcu_uptime_history, "MCU")
+    if mcu_suspicious:
+        summary += f", {mcu_msg}"
+        yield Result(state=State.CRIT, summary=summary)
+        return  # Return early with CRITICAL state
+    else:
+        summary += f", {mcu_msg}"
+    
+    # Update uptime history (keep last 10 values)
+    system_uptime_history.append(system_uptime_minutes)
+    mcu_uptime_history.append(mcu_uptime_minutes)
+    
+    if len(system_uptime_history) > 10:
+        system_uptime_history = system_uptime_history[-10:]
+    if len(mcu_uptime_history) > 10:
+        mcu_uptime_history = mcu_uptime_history[-10:]
+    
+    value_store[system_uptime_key] = system_uptime_history
+    value_store[mcu_uptime_key] = mcu_uptime_history
     
     if instance_data['systemAlarm'] == '1':
         summary += ', System Alarm is active'

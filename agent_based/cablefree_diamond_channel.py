@@ -125,21 +125,21 @@ def check_cablefree_diamond_channel(item, params, section):
         levels_upper=params.get('txFrequency', None),
         label='TX Frequency',
         metric_name=f'cablefree_diamond_channel_{item}_tx_frequency',
-        render_func=lambda v: f'{v}kHz'
+        render_func=lambda v: normalize_value(v, 1000, ['kHz', 'MHz', 'GHz'])
     )
     yield from check_levels(
         int(channel_data['rxFrequency']),
         levels_upper=params.get('rxFrequency', None),
         label='RX Frequency',
         metric_name=f'cablefree_diamond_channel_{item}_rx_frequency',
-        render_func=lambda v: f'{v}kHz'
+        render_func=lambda v: normalize_value(v, 1000, ['kHz', 'MHz', 'GHz'])
     )
     yield from check_levels(
         int(channel_data['trSpacing']),
         levels_upper=params.get('trSpacing', None),
         label='TR Spacing',
         metric_name=f'cablefree_diamond_channel_{item}_tr_spacing',
-        render_func=lambda v: f'{v}kHz'
+        render_func=lambda v: normalize_value(v, 1000, ['kHz', 'MHz', 'GHz'])
     )
     summary += f", TR Side is {channel_data['trSide']}"
     
@@ -162,7 +162,7 @@ def check_cablefree_diamond_channel(item, params, section):
         levels_upper=params.get('bandWidth', None),
         label='Bandwidth',
         metric_name=f'cablefree_diamond_channel_{item}_band_width',
-        render_func=lambda v: f'{v}kHz'
+        render_func=lambda v: normalize_value(v, 1000, ['kHz', 'MHz', 'GHz'])
     )
     
     # Get bandwidth values
@@ -174,7 +174,7 @@ def check_cablefree_diamond_channel(item, params, section):
         levels_upper=params.get('capacity', None),
         label='Capacity',
         metric_name=f'cablefree_diamond_channel_{item}_capacity',
-        render_func=lambda v: f'{v}Kbps'
+        render_func=lambda v: normalize_value(v, 1000, ['Kbps', 'Mbps', 'Gbps'])
     )
     
     yield from check_levels(
@@ -256,3 +256,19 @@ register.check_plugin(
     check_ruleset_name='cablefree_diamond',
     check_default_parameters={},
 )
+
+
+def normalize_value(value, base=1000, units=None):
+    """
+    Normalize a value to K, M, G units.
+    base: 1000 for kHz/MHz/GHz or Kbps/Mbps/Gbps
+    units: list of units, e.g. ['kHz', 'MHz', 'GHz']
+    """
+    if units is None:
+        units = ['K', 'M', 'G']
+    value = float(value)
+    for unit in units:
+        if value < base:
+            return f"{value:.2f}{unit}"
+        value /= base
+    return f"{value * base:.2f}{units[-1]}"  # fallback to largest unit
