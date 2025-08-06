@@ -232,6 +232,25 @@ def check_cablefree_diamond_channel(item, params, section):
     value_store[tx_modulation_key] = current_tx_modulation
     value_store[rx_modulation_key] = current_rx_modulation
     
+    # Add modulation metrics for graphing
+    tx_modulation_value = int(current_tx_modulation)
+    yield from check_levels(
+        tx_modulation_value,
+        levels_upper=None,  # No thresholds for modulation
+        label='TX Modulation',
+        metric_name=f'cablefree_diamond_channel_{item}_tx_modulation',
+        render_func=lambda v: f'Level {v}'
+    )
+    
+    rx_modulation_value = int(current_rx_modulation)
+    yield from check_levels(
+        rx_modulation_value,
+        levels_upper=None,  # No thresholds for modulation
+        label='RX Modulation',
+        metric_name=f'cablefree_diamond_channel_{item}_rx_modulation',
+        render_func=lambda v: f'Level {v}'
+    )
+    
     summary += f", Current TX Modulation is {current_tx_modulation}"
     summary += f", Current RX Modulation is {current_rx_modulation}"
     summary += f", TX Mute Status is {'Muted' if channel_data['txMuteStatus'] == '1' else 'Unmuted'}"
