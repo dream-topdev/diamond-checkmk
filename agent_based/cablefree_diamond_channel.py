@@ -179,7 +179,7 @@ def check_cablefree_diamond_channel(item, params, section):
     
     yield from check_levels(
         int(channel_data['rsl']) / 10,
-        levels_upper=params.get('rsl', None),
+        levels_lower=params.get('rsl', None),
         label='RSL',
         metric_name=f'cablefree_diamond_channel_{item}_rsl',
         render_func=lambda v: f'{v}dBm'

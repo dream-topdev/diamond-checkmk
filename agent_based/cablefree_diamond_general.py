@@ -32,6 +32,9 @@
 # .1.3.6.1.4.1.91111.4.80.1.1.1.1.10 --> mcuUptime / OCTET STRING
 # .1.3.6.1.4.1.91111.4.80.1.1.1.1.11 --> systemAlarm / INTEGER  { normal ( 0 ) , alarm ( 1 ) } 
 
+import time
+from datetime import datetime
+
 from cmk.base.plugins.agent_based.agent_based_api.v1 import (
     register,
     SNMPTree,
@@ -101,6 +104,20 @@ def parse_uptime_to_minutes(uptime_str):
         return 0
 
 
+def detect_restart(current_uptime_minutes, previous_uptime_minutes, current_time):
+    """
+    Detect if a restart occurred by comparing current and previous uptime values.
+    A restart is detected if current uptime is less than previous uptime.
+    """
+    if previous_uptime_minutes is None:
+        return False, None
+    
+    if current_uptime_minutes < previous_uptime_minutes:
+        return True, current_time
+    
+    return False, None
+
+
 def parse_sysDescr(string_table):
     parsed = {}
     for row in string_table:
@@ -153,6 +170,87 @@ def check_cablefree_diamond_general(item, params, section):
         return
     
     instance_data = section[item]
+    value_store = get_value_store()
+    current_time = time.time()
+    
+    # Parse uptime values
+    system_uptime_str = instance_data['systemUptime']
+    mcu_uptime_str = instance_data['mcuUptime']
+    
+    system_uptime_minutes = parse_uptime_to_minutes(system_uptime_str)
+    mcu_uptime_minutes = parse_uptime_to_minutes(mcu_uptime_str)
+    
+    # Get previous uptime values from value store
+    system_uptime_key = f"system_uptime_{item}"
+    mcu_uptime_key = f"mcu_uptime_{item}"
+    system_restart_history_key = f"system_restart_history_{item}"
+    mcu_restart_history_key = f"mcu_restart_history_{item}"
+    
+    previous_system_uptime = value_store.get(system_uptime_key)
+    previous_mcu_uptime = value_store.get(mcu_uptime_key)
+    
+    # Initialize restart history if not exists
+    if system_restart_history_key not in value_store:
+        value_store[system_restart_history_key] = []
+    if mcu_restart_history_key not in value_store:
+        value_store[mcu_restart_history_key] = []
+    
+    system_restart_history = value_store[system_restart_history_key]
+    mcu_restart_history = value_store[mcu_restart_history_key]
+    
+    # Detect restarts
+    system_restart_detected, system_restart_time = detect_restart(
+        system_uptime_minutes, previous_system_uptime, current_time
+    )
+    mcu_restart_detected, mcu_restart_time = detect_restart(
+        mcu_uptime_minutes, previous_mcu_uptime, current_time
+    )
+    
+    # Record restarts if detected
+    if system_restart_detected and system_restart_time:
+        system_restart_history.append({
+            'timestamp': system_restart_time,
+            'uptime_before': previous_system_uptime,
+            'uptime_after': system_uptime_minutes
+        })
+        # Keep only last 10 restarts to avoid memory issues
+        if len(system_restart_history) > 10:
+            system_restart_history = system_restart_history[-10:]
+        value_store[system_restart_history_key] = system_restart_history
+    
+    if mcu_restart_detected and mcu_restart_time:
+        mcu_restart_history.append({
+            'timestamp': mcu_restart_time,
+            'uptime_before': previous_mcu_uptime,
+            'uptime_after': mcu_uptime_minutes
+        })
+        # Keep only last 10 restarts to avoid memory issues
+        if len(mcu_restart_history) > 10:
+            mcu_restart_history = mcu_restart_history[-10:]
+        value_store[mcu_restart_history_key] = mcu_restart_history
+    
+    # Store current uptime values for next check
+    value_store[system_uptime_key] = system_uptime_minutes
+    value_store[mcu_uptime_key] = mcu_uptime_minutes
+    
+    # Add uptime metrics for graphing
+    yield from check_levels(
+        system_uptime_minutes * 60,  # Convert to seconds for better time rendering
+        levels_upper=None,  # No thresholds for uptime
+        label='System Uptime',
+        metric_name=f'cablefree_diamond_general_{item}_system_uptime',
+        render_func=render.timespan  # Use CheckMK's built-in time rendering
+    )
+    
+    yield from check_levels(
+        mcu_uptime_minutes * 60,  # Convert to seconds for better time rendering
+        levels_upper=None,  # No thresholds for uptime
+        label='MCU Uptime',
+        metric_name=f'cablefree_diamond_general_{item}_mcu_uptime',
+        render_func=render.timespan  # Use CheckMK's built-in time rendering
+    )
+    
+    # Build summary
     generalStatusIndex = instance_data['generalStatusIndex']
     if generalStatusIndex == '1':
         summary = 'Device is Remote'
@@ -191,77 +289,24 @@ def check_cablefree_diamond_general(item, params, section):
     
     summary += f", Site Name is {instance_data['siteName']}"
     
-    # Check uptime values with sophisticated logic
-    system_uptime_str = instance_data['systemUptime']
-    mcu_uptime_str = instance_data['mcuUptime']
-    
-    system_uptime_minutes = parse_uptime_to_minutes(system_uptime_str)
-    mcu_uptime_minutes = parse_uptime_to_minutes(mcu_uptime_str)
-    
-    # Get value store for tracking uptime history
-    value_store = get_value_store()
-    system_uptime_key = f"cablefree_diamond_general_{item}_system_uptime_history"
-    mcu_uptime_key = f"cablefree_diamond_general_{item}_mcu_uptime_history"
-    
-    # Get previous uptime values
-    system_uptime_history = value_store.get(system_uptime_key, [])
-    mcu_uptime_history = value_store.get(mcu_uptime_key, [])
-    
-    # Check for suspicious uptime patterns
-    def check_uptime_suspicious(current_uptime, uptime_history, uptime_name):
-        if current_uptime < 5:
-            # If uptime is very low, check if this is a new startup or suspicious
-            if len(uptime_history) > 0:
-                # Check if uptime decreased significantly (indicating restart)
-                last_uptime = uptime_history[-1]
-                if last_uptime > 30 and current_uptime < 5:  # Was running >30min, now <5min
-                    return True, f"{uptime_name} Uptime is {system_uptime_str if uptime_name == 'System' else mcu_uptime_str} (SUSPICIOUS RESTART - was {last_uptime:.1f}min, now {current_uptime:.1f}min)"
-                elif len(uptime_history) >= 3:
-                    # Check if this is the third time in recent history with low uptime
-                    recent_low_uptimes = sum(1 for u in uptime_history[-3:] if u < 5)
-                    if recent_low_uptimes >= 2:
-                        return True, f"{uptime_name} Uptime is {system_uptime_str if uptime_name == 'System' else mcu_uptime_str} (FREQUENT RESTARTS - {recent_low_uptimes + 1} times with low uptime)"
-            else:
-                # First time seeing this device, assume normal startup
-                return False, f"{uptime_name} Uptime is {system_uptime_str if uptime_name == 'System' else mcu_uptime_str} (Initial startup)"
-        return False, f"{uptime_name} Uptime is {system_uptime_str if uptime_name == 'System' else mcu_uptime_str}"
-    
-    # Check system uptime
-    system_suspicious, system_msg = check_uptime_suspicious(system_uptime_minutes, system_uptime_history, "System")
-    if system_suspicious:
-        summary += f", {system_msg}"
-        yield Result(state=State.CRIT, summary=summary)
-        return  # Return early with CRITICAL state
-    else:
-        summary += f", {system_msg}"
-    
-    # Check MCU uptime
-    mcu_suspicious, mcu_msg = check_uptime_suspicious(mcu_uptime_minutes, mcu_uptime_history, "MCU")
-    if mcu_suspicious:
-        summary += f", {mcu_msg}"
-        yield Result(state=State.CRIT, summary=summary)
-        return  # Return early with CRITICAL state
-    else:
-        summary += f", {mcu_msg}"
-    
-    # Update uptime history (keep last 10 values)
-    system_uptime_history.append(system_uptime_minutes)
-    mcu_uptime_history.append(mcu_uptime_minutes)
-    
-    if len(system_uptime_history) > 10:
-        system_uptime_history = system_uptime_history[-10:]
-    if len(mcu_uptime_history) > 10:
-        mcu_uptime_history = mcu_uptime_history[-10:]
-    
-    value_store[system_uptime_key] = system_uptime_history
-    value_store[mcu_uptime_key] = mcu_uptime_history
-    
     if instance_data['systemAlarm'] == '1':
         summary += ', System Alarm is active'
     else:
         summary += ', System Alarm is inactive'
     
-    yield Result(state=State.OK, summary=summary)
+    # Check for restarts and set appropriate state
+    restart_details = []
+    if system_restart_detected:
+        restart_details.append("System restart detected")
+    if mcu_restart_detected:
+        restart_details.append("MCU restart detected")
+    
+    if restart_details:
+        # Add restart details to summary
+        summary += f" - {'; '.join(restart_details)}"
+        yield Result(state=State.CRIT, summary=summary)
+    else:
+        yield Result(state=State.OK, summary=summary)
 
 
 register.check_plugin(
