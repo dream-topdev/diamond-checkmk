@@ -41,7 +41,6 @@ from cmk.base.plugins.agent_based.agent_based_api.v1 import (
     exists,
     Service,
     check_levels,
-    startswith,
     Result,
     State,
     render,
@@ -139,7 +138,7 @@ def parse_sysDescr(string_table):
 
 register.snmp_section(
     name='cablefree_diamond_general',
-    detect = startswith(".1.3.6.1.2.1.1.1.0", "CableFree GigaBit Ethernet Switch"),
+    detect = exists(".1.3.6.1.4.1.91111.4.80.1.1.1.*"),  # Check if generalStatusTable exists
     fetch=SNMPTree(
         base='.1.3.6.1.4.1.91111.4.80.1.1.1.1',
         oids=[
