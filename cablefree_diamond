@@ -3,6 +3,7 @@
   'download_url': 'https://github.com/dream-topdev/diamond-checkmk.git',
  'files': {'agent_based': ['cablefree_diamond_general.py',
                            'cablefree_diamond_channel.py',
+                           'cablefree_diamond_ports.py'
                            ],
            'agents': [],
            'alert_handlers': [],
@@ -19,23 +20,7 @@
            'web': ['plugins/metrics/cablefree_diamond.py', 'plugins/wato/check_parameters_diamond.py']},
  'name': 'cablefree_diamond',
  'title': 'SNMP Management of Cablefree Diamond',
- 'version': '1.1.0',
+ 'version': '1.4.0',
  'version.min_required': '2.0.0p24',
  'version.packaged': '2.0.0p24',
- 'version.usable_until': None}
-
-
-{'author': 'dream-topdev',
- 'description': 'This package is for management extension of Cablefree Diamond.',
- 'download_url': 'https://github.com/dream-topdev/diamond-checkmk.git',
- 'files': {'agent_based': ['cablefree_diamond_channel.py',
-                           'cablefree_diamond_general.py',
-                           'cablefree_diamond_ports.py'],
-           'web': ['plugins/metrics/cablefree_diamond.py',
-                   'plugins/wato/check_parameters_diamond.py']},
- 'name': 'cablefree_diamond',
- 'title': 'SNMP Management of Cablefree Diamond',
- 'version': '1.3.0',
- 'version.min_required': '2.2.0p44',
- 'version.packaged': '2.2.0p44',
  'version.usable_until': None}
