@@ -109,3 +109,8 @@ check_metrics["check_mk-cablefree_diamond_channel"] = {
         "name": "cablefree_diamond_channel_tx_power",
     },
 }
+
+# metrics for ports
+# Port monitoring is primarily status-based (link up/down, speed, flow control)
+# No numeric metrics are needed as the check plugin reports status information
+check_metrics["check_mk-cablefree_diamond_ports"] = {}
