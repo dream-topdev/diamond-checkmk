@@ -3,6 +3,7 @@
   'download_url': 'https://github.com/dream-topdev/diamond-checkmk.git',
  'files': {'agent_based': ['cablefree_diamond_general.py',
                            'cablefree_diamond_channel.py',
+                           'cablefree_diamond_channel_summary.py',
                            'cablefree_diamond_ports.py'
                            ],
            'agents': [],
